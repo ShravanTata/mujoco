@@ -1178,8 +1178,16 @@ void MakeUiSections(mj::Simulate* sim, const mjModel* m, const mjData* d) {
 
 // align and scale view
 void AlignAndScaleView(mj::Simulate* sim, const mjModel* m) {
-  // use default free camera parameters
-  mjv_defaultFreeCamera(m, &sim->cam);
+  // if the id is valid, use the initial fixed camera
+  if (m->vis.global.cameraid >= 0 && m->vis.global.cameraid < m->ncam) {
+    sim->cam.fixedcamid = m->vis.global.cameraid;
+    sim->cam.type = mjCAMERA_FIXED;
+  }
+
+  // otherwise use default free camera
+  else {
+    mjv_defaultFreeCamera(m, &sim->cam);
+  }
 }
 
 
@@ -1904,7 +1912,7 @@ Simulate::Simulate(std::unique_ptr<PlatformUIAdapter> platform_ui,
 //------------------------- Synchronize render and physics threads ---------------------------------
 
 // operations which require holding the mutex, prevents racing with physics thread
-void Simulate::Sync() {
+void Simulate::Sync(bool state_only) {
   MutexLock lock(this->mtx);
 
   if (!m_) {
@@ -2151,8 +2159,17 @@ void Simulate::Sync() {
   if (!is_passive_) {
     mjv_updateScene(m_, d_, &this->opt, &this->pert, &this->cam, mjCAT_ALL, &this->scn);
   } else {
-    mjv_copyModel(m_passive_, m_);
-    mjv_copyData(d_passive_, m_passive_, d_);
+    if (state_only) {
+      int state_size = mj_stateSize(m_, mjSTATE_INTEGRATION);
+      mjtNum* state = new mjtNum[state_size];
+      mj_getState(m_, d_, state, mjSTATE_INTEGRATION);
+      mj_setState(m_passive_, d_passive_, state, mjSTATE_INTEGRATION);
+      mj_forward(m_passive_, d_passive_);
+      delete[] state;
+    } else {
+      mjv_copyModel(m_passive_, m_);
+      mjv_copyData(d_passive_, m_passive_, d_);
+    }
 
     // append geoms from user_scn to scratch space
     if (user_scn) {

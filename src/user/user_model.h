@@ -87,6 +87,7 @@ class mjCModel_ : public mjsElement {
   int nbvh;            // number of total boundary volume hierarchies
   int nbvhstatic;      // number of static boundary volume hierarchies
   int nbvhdynamic;     // number of dynamic boundary volume hierarchies
+  int noct;            // number of total octree cells
   int nflexnode;       // number of nodes in all flexes
   int nflexvert;       // number of vertices in all flexes
   int nflexedge;       // number of edges in all flexes
@@ -227,13 +228,10 @@ class mjCModel : public mjCModel_, private mjSpec {
   template <class T> void DeleteAll(std::vector<T*>& elements);
 
   // delete object from the corresponding list
-  void DeleteElement(mjsElement* el);
+  void operator-=(mjsElement* el);
 
   // delete default and all descendants
   void RemoveDefault(mjCDef* def);
-
-  // detach subtree from model
-  void Detach(mjCBody* subtree);
 
   // API for access to model elements (outside tree)
   int NumObjects(mjtObj type);              // number of objects in specified list
@@ -325,6 +323,9 @@ class mjCModel : public mjCModel_, private mjSpec {
   // set attached flag
   void SetAttached(bool deepcopy) { attached_ |= !deepcopy; }
 
+  // check for repeated names in list
+  void CheckRepeat(mjtObj type);
+
  private:
   // settings for each defaults class
   std::vector<mjCDef*> defaults_;
@@ -413,6 +414,10 @@ class mjCModel : public mjCModel_, private mjSpec {
   // populate objects ids
   void ProcessLists(bool checkrepeat = true);
 
+  // process list of objects
+  template <class T> void ProcessList_(mjListKeyMap& ids, std::vector<T*>& list,
+                                       mjtObj type, bool checkrepeat = true);
+
   // reset lists of kinematic tree
   void ResetTreeLists();
 
@@ -427,9 +432,6 @@ class mjCModel : public mjCModel_, private mjSpec {
 
   // compute qpos0
   void ComputeReference();
-
-  // return true if all bodies have valid mass and inertia
-  bool CheckBodiesMassInertia(std::vector<mjCBody*> bodies);
 
   // return true if body has valid mass and inertia
   bool CheckBodyMassInertia(mjCBody* body);
@@ -453,11 +455,15 @@ class mjCModel : public mjCModel_, private mjSpec {
   template <class T>
   void ResolveReferences(std::vector<T*>& list, mjCBody* body = nullptr);
 
+  // delete all plugins created by the subtree
+  void DeleteSubtreePlugin(mjCBody* subtree);
+
   mjListKeyMap ids;   // map from object names to ids
   mjCError errInfo;   // last error info
   std::vector<mjKeyInfo> key_pending_;  // attached keyframes
   bool deepcopy_;     // copy objects when attaching
   bool attached_ = false;  // true if model is attached to a parent model
   std::unordered_map<const mjsCompiler*, mjSpec*> compiler2spec_;  // map from compiler to spec
+  std::vector<mjCBase*> detached_;  // list of detached objects
 };
 #endif  // MUJOCO_SRC_USER_USER_MODEL_H_
